@@ -14,7 +14,6 @@
     "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/supabase-js": "^2.108.2",
     "react": "^19.2.7",
-    "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.0"
   },
