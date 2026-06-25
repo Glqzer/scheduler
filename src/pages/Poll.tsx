@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { COMMON_TIMEZONES, getLocalTimezone, getLocalTimezoneLabel, formatSlotInTz } from '../lib/timezones'
 
 interface Poll {
-  id: string;
-  title: string;
-  description: string;
-  type: "date_only" | "date_time";
+  id: string
+  title: string
+  description: string
+  type: "date_only" | "date_time"
+  timezone: string
 }
 
 interface PollOption {
@@ -45,6 +47,7 @@ export default function Poll() {
 const totalPages = Math.ceil(allDates.length / PAGE_SIZE);
 const visibleDates = allDates.slice(datePage * PAGE_SIZE, (datePage + 1) * PAGE_SIZE);
 const visibleOptions = options.filter(o => visibleDates.includes(o.date));
+const [displayTz, setDisplayTz] = useState(getLocalTimezone())
 
   useEffect(() => {
     if (!id) return;
@@ -298,6 +301,29 @@ const visibleOptions = options.filter(o => visibleDates.includes(o.date));
         </div>
       </div>
 
+      {poll.type === 'date_time' && (
+  <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 1.5rem', marginBottom: 20 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Viewing in:</span>
+      <select
+        value={displayTz}
+        onChange={e => setDisplayTz(e.target.value)}
+        style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)', fontSize: 13, cursor: 'pointer' }}
+      >
+        <option value={getLocalTimezone()}>Local — {getLocalTimezoneLabel()}</option>
+        {COMMON_TIMEZONES.filter(t => t.value !== getLocalTimezone()).map(tz => (
+          <option key={tz.value} value={tz.value}>{tz.label}</option>
+        ))}
+      </select>
+      {poll.timezone && poll.timezone !== displayTz && (
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          Poll created in {COMMON_TIMEZONES.find(t => t.value === poll.timezone)?.label ?? poll.timezone}
+        </span>
+      )}
+    </div>
+  </div>
+)}
+
       <div
         style={{
           maxWidth: 1100,
@@ -309,7 +335,7 @@ const visibleOptions = options.filter(o => visibleDates.includes(o.date));
         }}
       >
         {totalPages > 1 && (
-  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
     <button
       onClick={() => setDatePage(p => Math.max(0, p - 1))}
       disabled={datePage === 0}
@@ -335,8 +361,20 @@ const visibleOptions = options.filter(o => visibleDates.includes(o.date));
         <div
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}
         >
-          <AvailabilityGrid poll={poll} options={visibleOptions} myAvailability={myAvailability} onToggle={toggleCell} />
-<HeatmapGrid poll={poll} options={visibleOptions} allAvailability={allAvailability} totalRespondents={totalRespondents} />
+          <AvailabilityGrid
+  poll={poll}
+  options={visibleOptions}
+  myAvailability={myAvailability}
+  onToggle={toggleCell}
+  displayTz={displayTz}
+/>
+<HeatmapGrid
+  poll={poll}
+  options={visibleOptions}
+  allAvailability={allAvailability}
+  totalRespondents={totalRespondents}
+  displayTz={displayTz}
+/>
         </div>
       </div>
 
@@ -348,13 +386,14 @@ const visibleOptions = options.filter(o => visibleDates.includes(o.date));
       {step === "identity" && (
         <Popup>
           <IdentityStep
-            pollId={poll.id}
-            onDone={(r) => {
-              setRespondent(r);
-              loadMyAvailability(r.id);
-              setStep("grid");
-            }}
-          />
+  pollId={poll.id}
+  onDone={(r, tz) => {
+    setRespondent(r)
+    setDisplayTz(tz)
+    loadMyAvailability(r.id)
+    setStep('grid')
+  }}
+/>
         </Popup>
       )}
     </div>
@@ -528,13 +567,11 @@ function BackToDashboardButton() {
   );
 }
 
-function IdentityStep({
-  pollId,
-  onDone,
-}: {
-  pollId: string;
-  onDone: (r: Respondent) => void;
+function IdentityStep({ pollId, onDone }: {
+  pollId: string
+  onDone: (r: Respondent, tz: string) => void
 }) {
+  const [timezone, setTimezone] = useState(getLocalTimezone())
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [emailLocked, setEmailLocked] = useState(false);
@@ -564,7 +601,7 @@ function IdentityStep({
       .eq("email", email.trim())
       .maybeSingle();
     if (existing) {
-      onDone(existing);
+      onDone(existing, timezone);
       return;
     }
     const { data: newRespondent, error: insertError } = await supabase
@@ -577,7 +614,7 @@ function IdentityStep({
       setLoading(false);
       return;
     }
-    onDone(newRespondent);
+    onDone(newRespondent, timezone);
   };
 
   if (loading)
@@ -649,6 +686,19 @@ function IdentityStep({
         {error && (
           <p style={{ color: "var(--accent)", fontSize: 13 }}>{error}</p>
         )}
+        <div>
+  <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Your time zone</label>
+  <select
+    value={timezone}
+    onChange={e => setTimezone(e.target.value)}
+    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)', width: '100%', fontSize: 13 }}
+  >
+    <option value={getLocalTimezone()}>Local — {getLocalTimezoneLabel()}</option>
+    {COMMON_TIMEZONES.filter(t => t.value !== getLocalTimezone()).map(tz => (
+      <option key={tz.value} value={tz.value}>{tz.label}</option>
+    ))}
+  </select>
+</div>
         <button
           onClick={handleSubmit}
           disabled={loading}
@@ -669,16 +719,12 @@ function IdentityStep({
   );
 }
 
-function AvailabilityGrid({
-  poll,
-  options,
-  myAvailability,
-  onToggle,
-}: {
-  poll: Poll;
-  options: PollOption[];
-  myAvailability: Set<string>;
-  onToggle: (optionId: string) => void;
+function AvailabilityGrid({ poll, options, myAvailability, onToggle, displayTz }: {
+  poll: Poll
+  options: PollOption[]
+  myAvailability: Set<string>
+  onToggle: (optionId: string) => void
+  displayTz: string
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState(false);
@@ -778,7 +824,10 @@ function AvailabilityGrid({
   if (poll.type === "date_only") {
     return (
       <div>
-        <GridHeader title="Your availability" legend={<AvailableLegend />} />
+        <GridHeader
+  title={`Your availability ${displayTz !== poll.timezone ? `(${COMMON_TIMEZONES.find(t => t.value === displayTz)?.label?.split(' ')[0] ?? displayTz})` : ''}`}
+  legend={<AvailableLegend />}
+/>
         <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
@@ -830,27 +879,24 @@ function AvailabilityGrid({
     );
   }
 
-  const slotsByHour: Record<
-    string,
-    { mins: number; optsByDate: Record<string, PollOption> }[]
-  > = {};
-  for (const opt of options) {
-    if (!opt.slot_time) continue;
-    const parts = opt.slot_time.split(":").map(Number);
-    const h = parts[0];
-    const m = parts[1];
-    const mins = h * 60 + m;
-    const period = h < 12 ? "AM" : "PM";
-    const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    const hourKey = `${display} ${period}`;
-    if (!slotsByHour[hourKey]) slotsByHour[hourKey] = [];
-    let slot = slotsByHour[hourKey].find((s) => s.mins === mins);
-    if (!slot) {
-      slot = { mins, optsByDate: {} };
-      slotsByHour[hourKey].push(slot);
-    }
-    slot.optsByDate[opt.date] = opt;
-  }
+  const slotsByHour: Record<string, { mins: number; optsByDate: Record<string, PollOption> }[]> = {};
+for (const opt of options) {
+  if (!opt.slot_time) continue;
+  const parts = opt.slot_time.split(":").map(Number);
+  const h = parts[0]; const m = parts[1];
+  const mins = h * 60 + m;
+
+  // Use converted time for the hour label
+  const convertedLabel = formatSlotInTz(opt.date, opt.slot_time, poll.timezone, displayTz)
+  const [timePart, period] = convertedLabel.split(' ')
+  const displayH = timePart.split(':')[0]
+  const hourKey = `${displayH} ${period}`
+
+  if (!slotsByHour[hourKey]) slotsByHour[hourKey] = [];
+  let slot = slotsByHour[hourKey].find((s) => s.mins === mins);
+  if (!slot) { slot = { mins, optsByDate: {} }; slotsByHour[hourKey].push(slot); }
+  slot.optsByDate[opt.date] = opt;
+}
 
   const hours = Object.keys(slotsByHour);
 
@@ -858,25 +904,10 @@ function AvailabilityGrid({
     <div style={{ position: "relative" }} onMouseMove={handleMouseMove}>
       <GridHeader title="Your availability" legend={<AvailableLegend />} />
       {hoveredOption?.slot_time && (
-        <div
-          style={{
-            position: "fixed",
-            left: tooltipPos.x + 12,
-            top: tooltipPos.y - 30,
-            background: "#1f2937",
-            color: "white",
-            padding: "4px 10px",
-            borderRadius: 6,
-            fontSize: 12,
-            pointerEvents: "none",
-            zIndex: 100,
-          }}
-        >
-          {formatDate(hoveredOption.date)}{" "}
-          {getSlotLabel(hoveredOption.slot_time)} –{" "}
-          {addMins(hoveredOption.slot_time, 30)}
-        </div>
-      )}
+  <div style={{ position: "fixed", left: tooltipPos.x + 12, top: tooltipPos.y - 30, background: "#1f2937", color: "white", padding: "4px 10px", borderRadius: 6, fontSize: 12, pointerEvents: "none", zIndex: 100 }}>
+{formatDate(hoveredOption.date)} {formatSlotInTz(hoveredOption.date, hoveredOption.slot_time, poll.timezone, displayTz)} – {formatSlotInTz(hoveredOption.date, addMinsToSlot(hoveredOption.slot_time, 30), poll.timezone, displayTz)}
+  </div>
+)}
       <div style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
@@ -975,11 +1006,13 @@ function HeatmapGrid({
   options,
   allAvailability,
   totalRespondents,
+  displayTz,
 }: {
   poll: Poll;
   options: PollOption[];
   allAvailability: Record<string, number>;
   totalRespondents: number;
+  displayTz: string;
 }) {
   const getColor = (count: number) => {
     if (count === 0 || totalRespondents === 0) return "var(--border)";
@@ -1045,27 +1078,24 @@ function HeatmapGrid({
     );
   }
 
-  const slotsByHour: Record<
-    string,
-    { mins: number; optsByDate: Record<string, PollOption> }[]
-  > = {};
-  for (const opt of options) {
-    if (!opt.slot_time) continue;
-    const parts = opt.slot_time.split(":").map(Number);
-    const h = parts[0];
-    const m = parts[1];
-    const mins = h * 60 + m;
-    const period = h < 12 ? "AM" : "PM";
-    const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    const hourKey = `${display} ${period}`;
-    if (!slotsByHour[hourKey]) slotsByHour[hourKey] = [];
-    let slot = slotsByHour[hourKey].find((s) => s.mins === mins);
-    if (!slot) {
-      slot = { mins, optsByDate: {} };
-      slotsByHour[hourKey].push(slot);
-    }
-    slot.optsByDate[opt.date] = opt;
-  }
+  const slotsByHour: Record<string, { mins: number; optsByDate: Record<string, PollOption> }[]> = {};
+for (const opt of options) {
+  if (!opt.slot_time) continue;
+  const parts = opt.slot_time.split(":").map(Number);
+  const h = parts[0]; const m = parts[1];
+  const mins = h * 60 + m;
+
+  // Use converted time for the hour label
+  const convertedLabel = formatSlotInTz(opt.date, opt.slot_time, poll.timezone, displayTz)
+  const [timePart, period] = convertedLabel.split(' ')
+  const displayH = timePart.split(':')[0]
+  const hourKey = `${displayH} ${period}`
+
+  if (!slotsByHour[hourKey]) slotsByHour[hourKey] = [];
+  let slot = slotsByHour[hourKey].find((s) => s.mins === mins);
+  if (!slot) { slot = { mins, optsByDate: {} }; slotsByHour[hourKey].push(slot); }
+  slot.optsByDate[opt.date] = opt;
+}
 
   const hours = Object.keys(slotsByHour);
 
@@ -1256,16 +1286,12 @@ function formatDayOfWeek(date: string) {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" })
 }
 
-function addMins(slotTime: string, mins: number) {
-  const parts = slotTime.split(":").map(Number);
-  const h = parts[0];
-  const m = parts[1];
-  const total = h * 60 + m + mins;
-  const nh = Math.floor(total / 60);
-  const nm = total % 60;
-  const period = nh < 12 ? "AM" : "PM";
-  const display = nh === 0 ? 12 : nh > 12 ? nh - 12 : nh;
-  return `${display}:${String(nm).padStart(2, "0")} ${period}`;
+function addMinsToSlot(slotTime: string, mins: number): string {
+  const parts = slotTime.split(':').map(Number)
+  const total = parts[0] * 60 + parts[1] + mins
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
 }
 
 function parseMins(slotTime: string) {

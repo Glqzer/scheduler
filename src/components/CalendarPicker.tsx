@@ -43,18 +43,22 @@ export default function CalendarPicker({ selected, onChange }: Props) {
   const [dragStart, setDragStart] = useState<Date | null>(null);
   const [dragEnd, setDragEnd] = useState<Date | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [preDragSelected, setPreDragSelected] = useState<Date[]>([]);
 
   const days = getDaysInMonth(viewYear, viewMonth);
   const firstDayOfWeek = days[0].getDay();
 
-  const selectedKeys = new Set(selected.map(dateKey));
-
   const dragPreviewKeys = new Set<string>();
   if (dragStart && dragEnd) {
-    getDatesBetween(dragStart, dragEnd).forEach((d) =>
-      dragPreviewKeys.add(dateKey(d)),
-    );
+    getDatesBetween(dragStart, dragEnd)
+      .filter((d) => d >= today || isSameDay(d, today))
+      .forEach((d) => dragPreviewKeys.add(dateKey(d)));
   }
+
+  // Use preDragSelected for the selected keys during drag
+  const selectedKeys = new Set(
+    (isDragging ? preDragSelected : selected).map(dateKey),
+  );
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -71,31 +75,29 @@ export default function CalendarPicker({ selected, onChange }: Props) {
   };
 
   const commitDrag = useCallback(() => {
-  if (dragStart && dragEnd) {
-    if (isSameDay(dragStart, dragEnd)) {
-      // Single click — toggle
-      const exists = selected.some(s => isSameDay(s, dragStart))
-      if (exists) {
-        onChange(selected.filter(s => !isSameDay(s, dragStart)))
-      } else {
-        onChange([...selected, dragStart])
-      }
-    } else {
-      // Drag — always add range
-      const range = getDatesBetween(dragStart, dragEnd)
-      const newSelected = [...selected]
-      range.forEach(d => {
-        if (!newSelected.some(s => isSameDay(s, d))) {
-          newSelected.push(d)
+    if (dragStart && dragEnd) {
+      if (isSameDay(dragStart, dragEnd)) {
+        const exists = preDragSelected.some((s) => isSameDay(s, dragStart));
+        if (exists) {
+          onChange(preDragSelected.filter((s) => !isSameDay(s, dragStart)));
+        } else {
+          onChange([...preDragSelected, dragStart]);
         }
-      })
-      onChange(newSelected)
+      } else {
+        const range = getDatesBetween(dragStart, dragEnd).filter(
+          (d) => d >= today || isSameDay(d, today),
+        ); // filter past dates
+        const newSelected = [...preDragSelected];
+        range.forEach((d) => {
+          if (!newSelected.some((s) => isSameDay(s, d))) newSelected.push(d);
+        });
+        onChange(newSelected);
+      }
     }
-  }
-  setDragStart(null)
-  setDragEnd(null)
-  setIsDragging(false)
-}, [dragStart, dragEnd, selected, onChange])
+    setDragStart(null);
+    setDragEnd(null);
+    setIsDragging(false);
+  }, [dragStart, dragEnd, preDragSelected, onChange]);
 
   useEffect(() => {
     const onMouseUp = () => {
@@ -110,6 +112,7 @@ export default function CalendarPicker({ selected, onChange }: Props) {
     setDragStart(date);
     setDragEnd(date);
     setIsDragging(true);
+    setPreDragSelected(selected);
   };
 
   const handleMouseEnter = (date: Date) => {
@@ -141,12 +144,12 @@ export default function CalendarPicker({ selected, onChange }: Props) {
   };
 
   const handleDayClick = (date: Date) => {
-  if (date < today && !isSameDay(date, today)) return
-  const exists = selected.some(s => isSameDay(s, date))
-  if (exists) {
-    onChange(selected.filter(s => !isSameDay(s, date)))
-  }
-}
+    if (date < today && !isSameDay(date, today)) return;
+    const exists = selected.some((s) => isSameDay(s, date));
+    if (exists) {
+      onChange(selected.filter((s) => !isSameDay(s, date)));
+    }
+  };
 
   const monthLabel = new Date(viewYear, viewMonth).toLocaleDateString("en-US", {
     month: "long",
@@ -155,7 +158,7 @@ export default function CalendarPicker({ selected, onChange }: Props) {
 
   return (
     <div
-      style={{ userSelect: "none", maxWidth: 320 }}
+      style={{ userSelect: "none", width: "100%" }}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
@@ -180,7 +183,7 @@ export default function CalendarPicker({ selected, onChange }: Props) {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 2,
+          gap: 4,
           textAlign: "center",
         }}
       >
@@ -226,14 +229,13 @@ export default function CalendarPicker({ selected, onChange }: Props) {
               onMouseEnter={() => handleMouseEnter(date)}
               onTouchStart={() => handleTouchStart(date)}
               style={{
-                padding: "6px 0",
-                borderRadius: 6,
+                padding: "10px 0",
+                borderRadius: 8,
                 cursor: isPast ? "default" : "pointer",
                 background: bg,
                 color,
-                fontSize: 14,
+                fontSize: 15,
                 textDecoration: isPast ? "line-through" : "none",
-                opacity: isPast ? 0.35 : 1,
               }}
             >
               {date.getDate()}

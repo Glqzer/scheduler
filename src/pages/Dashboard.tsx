@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import CreatePollModal from './CreatePoll'
 
 interface Poll {
   id: string;
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showCreate, setShowCreate] = useState(false)
 
   const loadPolls = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -93,7 +95,7 @@ export default function Dashboard() {
               </button>
             )}
             <button
-              onClick={() => navigate("/create")}
+              onClick={() => setShowCreate(true)}
               style={{ padding: "10px 20px", background: "linear-gradient(135deg, var(--primary), #4f46e5)", color: "white", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14, boxShadow: "0 4px 12px rgba(109, 40, 217, 0.3)", display: "flex", alignItems: "center", gap: 6 }}
             >
               <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> New event
@@ -151,6 +153,16 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {showCreate && (
+  <CreatePollModal
+    onClose={() => setShowCreate(false)}
+    onCreated={(pollId) => {
+      setShowCreate(false)
+      loadPolls()
+      navigate(`/poll/${pollId}`)
+    }}
+  />
+)}
     </div>
   );
 }
