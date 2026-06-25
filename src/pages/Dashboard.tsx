@@ -66,7 +66,7 @@ export default function Dashboard() {
       {/* Navbar */}
       <nav style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "0 2rem", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
         <span style={{ fontWeight: 700, fontSize: 18, background: "linear-gradient(135deg, var(--primary), var(--accent))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          scheduler
+          BeatTheMeet
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{userEmail}</span>
