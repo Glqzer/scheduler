@@ -235,7 +235,16 @@ export default function Poll() {
           padding: "2rem 1.5rem 1rem",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "flex-start", flexDirection: isMobile ? "column" : "row", flexWrap: "wrap", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "flex-start" : "flex-start",
+            flexDirection: isMobile ? "column" : "row",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text)" }}>
               {poll.title}
@@ -825,6 +834,7 @@ function AvailabilityGrid({
   onToggle: (optionId: string) => void;
   displayTz: string;
 }) {
+  const isMobile = useIsMobile();
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState(false);
   const [dragStartCell, setDragStartCell] = useState<{
@@ -841,7 +851,15 @@ function AvailabilityGrid({
   const [hoveredOption, setHoveredOption] = useState<PollOption | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
+  // Mobile two-tap range selection
+  const [tapStart, setTapStart] = useState<{
+    date: string;
+    mins: number;
+    id: string;
+  } | null>(null);
+
   const handleMouseDown = (optionId: string, opt: PollOption) => {
+    if (isMobile) return;
     const willBeAvailable = !myAvailability.has(optionId);
     setDragValue(willBeAvailable);
     setIsDragging(true);
@@ -859,6 +877,7 @@ function AvailabilityGrid({
     opt: PollOption,
     e: React.MouseEvent,
   ) => {
+    if (isMobile) return;
     setHoveredOption(opt);
     setTooltipPos({ x: e.clientX, y: e.clientY });
     if (!isDragging || !dragStartCell || !opt.slot_time) return;
@@ -871,9 +890,7 @@ function AvailabilityGrid({
     const minMins = Math.min(dragStartCell.mins, currentCell.mins);
     const maxMins = Math.max(dragStartCell.mins, currentCell.mins);
 
-    // Build the new availability from pre-drag state
     const next = new Set(preDragAvailability);
-
     for (const option of options) {
       if (!option.slot_time) continue;
       const oMins = parseMins(option.slot_time);
@@ -888,16 +905,60 @@ function AvailabilityGrid({
       }
     }
 
-    // Find what changed and sync to DB
     const added = [...next].filter((id) => !myAvailability.has(id));
     const removed = [...myAvailability].filter((id) => !next.has(id));
-
     for (const id of added) onToggle(id);
     for (const id of removed) onToggle(id);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (hoveredOption) setTooltipPos({ x: e.clientX, y: e.clientY });
+  };
+
+  // Mobile tap handler
+  const handleMobileTap = (optionId: string, opt: PollOption) => {
+    if (poll.type === "date_only") {
+      onToggle(optionId);
+      return;
+    }
+
+    if (!opt.slot_time) return;
+    const cell = {
+      date: opt.date,
+      mins: parseMins(opt.slot_time),
+      id: optionId,
+    };
+
+    if (!tapStart) {
+      // First tap — set start
+      setTapStart(cell);
+      return;
+    }
+
+    // Second tap — fill range
+    const minDate = [tapStart.date, cell.date].sort()[0];
+    const maxDate = [tapStart.date, cell.date].sort()[1];
+    const minMins = Math.min(tapStart.mins, cell.mins);
+    const maxMins = Math.max(tapStart.mins, cell.mins);
+
+    const willBeAvailable = !myAvailability.has(tapStart.id);
+
+    for (const option of options) {
+      if (!option.slot_time) continue;
+      const oMins = parseMins(option.slot_time);
+      const inRect =
+        option.date >= minDate &&
+        option.date <= maxDate &&
+        oMins >= minMins &&
+        oMins <= maxMins;
+      if (inRect) {
+        const isAvailable = myAvailability.has(option.id);
+        if (willBeAvailable && !isAvailable) onToggle(option.id);
+        if (!willBeAvailable && isAvailable) onToggle(option.id);
+      }
+    }
+
+    setTapStart(null);
   };
 
   useEffect(() => {
@@ -920,13 +981,24 @@ function AvailabilityGrid({
     return `${display}:${String(m).padStart(2, "0")} ${period}`;
   };
 
+  const cellHeight = isMobile ? 28 : 20;
+  const cellHeightLarge = isMobile ? 48 : 40;
+
   if (poll.type === "date_only") {
     return (
       <div>
-        <GridHeader
-          title={`Your availability ${displayTz !== poll.timezone ? `(${COMMON_TIMEZONES.find((t) => t.value === displayTz)?.label?.split(" ")[0] ?? displayTz})` : ""}`}
-          legend={<AvailableLegend />}
-        />
+        <GridHeader title="Your availability" legend={<AvailableLegend />} />
+        {isMobile && (
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--text-secondary)",
+              marginBottom: 10,
+            }}
+          >
+            Tap a date to mark yourself as available. Tap again to remove.
+          </p>
+        )}
         <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
@@ -943,7 +1015,17 @@ function AvailabilityGrid({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {formatDate(opt.date)}
+                    <div
+                      style={{
+                        fontWeight: 400,
+                        fontSize: 11,
+                        color: "var(--text-secondary)",
+                        marginBottom: 2,
+                      }}
+                    >
+                      {formatDayOfWeek(opt.date)}
+                    </div>
+                    <div>{formatDate(opt.date)}</div>
                   </th>
                 ))}
               </tr>
@@ -956,9 +1038,10 @@ function AvailabilityGrid({
                       onMouseDown={() => handleMouseDown(opt.id, opt)}
                       onMouseEnter={(e) => handleMouseEnter(opt.id, opt, e)}
                       onMouseLeave={() => setHoveredOption(null)}
+                      onClick={() => isMobile && handleMobileTap(opt.id, opt)}
                       style={{
                         width: "100%",
-                        height: 40,
+                        height: cellHeightLarge,
                         borderRadius: 6,
                         cursor: "pointer",
                         background: myAvailability.has(opt.id)
@@ -988,8 +1071,6 @@ function AvailabilityGrid({
     const h = parts[0];
     const m = parts[1];
     const mins = h * 60 + m;
-
-    // Use converted time for the hour label
     const convertedLabel = formatSlotInTz(
       opt.date,
       opt.slot_time,
@@ -999,7 +1080,6 @@ function AvailabilityGrid({
     const [timePart, period] = convertedLabel.split(" ");
     const displayH = timePart.split(":")[0];
     const hourKey = `${displayH} ${period}`;
-
     if (!slotsByHour[hourKey]) slotsByHour[hourKey] = [];
     let slot = slotsByHour[hourKey].find((s) => s.mins === mins);
     if (!slot) {
@@ -1014,7 +1094,28 @@ function AvailabilityGrid({
   return (
     <div style={{ position: "relative" }} onMouseMove={handleMouseMove}>
       <GridHeader title="Your availability" legend={<AvailableLegend />} />
-      {hoveredOption?.slot_time && (
+
+      {/* Mobile instructions */}
+      {isMobile && (
+        <div
+          style={{
+            background: "var(--primary-light)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
+            marginBottom: 12,
+            fontSize: 13,
+            color: "var(--primary)",
+          }}
+        >
+          {tapStart
+            ? "📍 Now tap the end of your available range"
+            : "👆 Tap where your availability starts, then tap where it ends"}
+        </div>
+      )}
+
+      {/* Desktop tooltip */}
+      {!isMobile && hoveredOption?.slot_time && (
         <div
           style={{
             position: "fixed",
@@ -1045,11 +1146,12 @@ function AvailabilityGrid({
           )}
         </div>
       )}
-      <div style={{ overflowX: "auto" }}>
+
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ width: 70 }} />
+              <th style={{ width: isMobile ? 50 : 70 }} />
               {dates.map((d) => (
                 <th
                   key={d}
@@ -1101,6 +1203,8 @@ function AvailabilityGrid({
                   </td>
                   {dates.map((d) => {
                     const opt = slot.optsByDate[d];
+                    const isTapStart =
+                      tapStart && opt && tapStart.id === opt.id;
                     return (
                       <td key={d} style={{ padding: 2, textAlign: "center" }}>
                         {opt ? (
@@ -1110,20 +1214,28 @@ function AvailabilityGrid({
                               handleMouseEnter(opt.id, opt, e)
                             }
                             onMouseLeave={() => setHoveredOption(null)}
+                            onClick={() =>
+                              isMobile && handleMobileTap(opt.id, opt)
+                            }
                             style={{
                               width: "100%",
-                              height: 20,
+                              height: cellHeight,
                               borderRadius: 4,
                               cursor: "pointer",
-                              background: myAvailability.has(opt.id)
-                                ? "#22c55e"
-                                : "var(--border)",
+                              background: isTapStart
+                                ? "var(--primary)"
+                                : myAvailability.has(opt.id)
+                                  ? "#22c55e"
+                                  : "var(--border)",
                               transition: "background 0.1s",
                               userSelect: "none",
+                              outline: isTapStart
+                                ? "2px solid var(--primary)"
+                                : "none",
                             }}
                           />
                         ) : (
-                          <div style={{ height: 20 }} />
+                          <div style={{ height: cellHeight }} />
                         )}
                       </td>
                     );
@@ -1151,6 +1263,9 @@ function HeatmapGrid({
   totalRespondents: number;
   displayTz: string;
 }) {
+  const isMobile = useIsMobile();
+  const cellHeight = isMobile ? 28 : 20;
+  const cellHeightLarge = isMobile ? 48 : 40;
   const getColor = (count: number) => {
     if (count === 0 || totalRespondents === 0) return "var(--border)";
     const ratio = count / totalRespondents;
