@@ -668,6 +668,15 @@ function CalendarImportStep({
       const rangeEnd = new Date(dates[dates.length - 1] + "T23:59:59Z");
       const busyEvents = getEventsInRange(events, rangeStart, rangeEnd);
 
+      console.log(
+        "busy events:",
+        busyEvents.map((e) => ({
+          summary: e.summary,
+          start: e.start.toISOString(),
+          end: e.end.toISOString(),
+        })),
+      );
+
       sessionStorage.setItem(
         `calendar-busy-${poll.id}`,
         JSON.stringify(
