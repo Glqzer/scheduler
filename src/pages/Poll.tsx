@@ -100,6 +100,9 @@ export default function Poll() {
       const m = parts[1];
 
       const slotStart = slotToUTC(option.date, h, m, poll.timezone);
+      console.log(
+        `slot ${option.date} ${h}:${m} in ${poll.timezone} → UTC: ${slotStart.toISOString()}`,
+      );
       const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
 
       const busyEvent = busy.find((b) => {
