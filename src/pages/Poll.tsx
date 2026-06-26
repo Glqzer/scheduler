@@ -563,6 +563,7 @@ export default function Poll() {
               const busyRaw = sessionStorage.getItem(
                 `calendar-busy-${poll.id}`,
               );
+              console.log("busyRaw from sessionStorage:", busyRaw);
               if (busyRaw) {
                 const busy: { start: string; end: string; summary?: string }[] =
                   JSON.parse(busyRaw);
@@ -705,6 +706,7 @@ function CalendarImportStep({
       const rangeEnd = new Date(dates[dates.length - 1] + "T23:59:59Z");
       const busyEvents = getEventsInRange(events, rangeStart, rangeEnd);
 
+      console.log("setting sessionStorage for poll:", poll.id);
       sessionStorage.setItem(
         `calendar-busy-${poll.id}`,
         JSON.stringify(
@@ -715,7 +717,7 @@ function CalendarImportStep({
           })),
         ),
       );
-
+      console.log("sessionStorage set, calling onDone");
       setLoading(false);
       onDone(); // ← only called on success
     } catch (err) {
