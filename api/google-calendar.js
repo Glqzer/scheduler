@@ -17,8 +17,8 @@ export default async function handler(req, res) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      client_secret: import.meta.env.GOOGLE_CLIENT_SECRET,
+      client_id: process.env.VITE_GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     })
