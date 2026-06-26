@@ -2048,11 +2048,29 @@ function parseMins(slotTime: string) {
 }
 
 function slotToUTC(date: string, h: number, m: number, tz: string): Date {
-  const naive = `${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
-  const utcGuess = new Date(naive + "Z").getTime();
-  const inTz = new Date(
-    new Date(utcGuess).toLocaleString("en-US", { timeZone: tz }),
-  ).getTime();
-  const offset = utcGuess - inTz;
-  return new Date(utcGuess + offset);
+  // Build the wall clock time string
+  const naive = `${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
+  
+  // Treat it as UTC first to get a Date object
+  const utcGuess = new Date(naive + 'Z').getTime()
+  
+  // Ask the browser: what does this UTC moment look like in the target timezone?
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+  
+  const inTzStr = formatter.format(new Date(utcGuess))
+  const inTzDate = new Date(inTzStr + 'Z').getTime()
+  
+  // The offset between what we want (naive) and what UTC actually shows in that tz
+  const offset = utcGuess - inTzDate
+  
+  return new Date(utcGuess + offset)
 }
