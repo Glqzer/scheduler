@@ -29,7 +29,7 @@ interface PollOption {
 interface Respondent {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
 }
 
 type Step = "calendar_import" | "identity" | "grid";
@@ -100,9 +100,6 @@ export default function Poll() {
       const m = parts[1];
 
       const slotStart = slotToUTC(option.date, h, m, poll.timezone);
-      console.log(
-        `slot ${option.date} ${h}:${m} in ${poll.timezone} → UTC: ${slotStart.toISOString()}`,
-      );
       const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
 
       const busyEvent = busy.find((b) => {
@@ -303,8 +300,8 @@ export default function Poll() {
                   Filling as{" "}
                   <strong style={{ color: "var(--text)" }}>
                     {respondent.name}
-                  </strong>{" "}
-                  ({respondent.email})
+                  </strong>
+                  {respondent.email && ` (${respondent.email})`}
                 </span>
                 <button
                   onClick={() => setShowCalendarImport(true)}
@@ -437,8 +434,9 @@ export default function Poll() {
           maxWidth: 1100,
           margin: "0 auto",
           padding: "0 1.5rem 3rem",
-          filter: step !== "grid" ? "blur(4px)" : "none",
-          pointerEvents: step !== "grid" ? "none" : "auto",
+          filter: step !== "grid" || showCalendarImport ? "blur(4px)" : "none",
+          pointerEvents:
+            step !== "grid" || showCalendarImport ? "none" : "auto",
           transition: "filter 0.3s",
         }}
       >
@@ -706,15 +704,6 @@ function CalendarImportStep({
       const rangeStart = new Date(dates[0] + "T00:00:00Z");
       const rangeEnd = new Date(dates[dates.length - 1] + "T23:59:59Z");
       const busyEvents = getEventsInRange(events, rangeStart, rangeEnd);
-
-      console.log(
-        "busy events:",
-        busyEvents.map((e) => ({
-          summary: e.summary,
-          start: e.start.toISOString(),
-          end: e.end.toISOString(),
-        })),
-      );
 
       sessionStorage.setItem(
         `calendar-busy-${poll.id}`,
@@ -1021,6 +1010,7 @@ function IdentityStep({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [emailLocked, setEmailLocked] = useState(false);
+  const [emailRequired, setEmailRequired] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -1034,32 +1024,95 @@ function IdentityStep({
     });
   }, []);
 
+  // When name changes, check if this name already exists with an email
+  const handleNameBlur = async () => {
+    if (!name.trim()) return;
+    const { data } = await supabase
+      .from("respondents")
+      .select("email")
+      .eq("poll_id", pollId)
+      .eq("name", name.trim())
+      .maybeSingle();
+
+    if (data && data.email) {
+      // Name exists with email — require email to continue
+      setEmailRequired(true);
+    } else if (data && !data.email) {
+      // Name exists without email — no email needed
+      setEmailRequired(false);
+    } else {
+      // New name — email optional
+      setEmailRequired(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!name.trim() || !email.trim())
-      return setError("Please enter your name and email.");
+    if (!name.trim()) return setError("Please enter your name.");
+    if (emailRequired && !email.trim())
+      return setError(
+        "This name already has an email associated. Please enter it to continue.",
+      );
     setLoading(true);
     setError("");
-    const { data: existing } = await supabase
+
+    // Look up existing respondent
+    let query = supabase
       .from("respondents")
       .select("*")
       .eq("poll_id", pollId)
-      .eq("name", name.trim())
-      .eq("email", email.trim())
-      .maybeSingle();
+      .eq("name", name.trim());
+
+    if (email.trim()) {
+      query = query.eq("email", email.trim());
+    } else {
+      query = query.is("email", null);
+    }
+
+    const { data: existing } = await query.maybeSingle();
     if (existing) {
       onDone(existing, timezone);
       return;
     }
+
+    // Check for name collision with different email
+    const { data: nameCheck } = await supabase
+      .from("respondents")
+      .select("id, email")
+      .eq("poll_id", pollId)
+      .eq("name", name.trim())
+      .maybeSingle();
+
+    if (nameCheck) {
+      if (nameCheck.email && !email.trim()) {
+        setError(
+          "This name already has an email associated. Please enter it to continue.",
+        );
+        setEmailRequired(true);
+        setLoading(false);
+        return;
+      }
+      if (!nameCheck.email && email.trim()) {
+        // Name exists without email, user is providing one now — treat as new respondent
+      }
+    }
+
+    // Create new respondent
     const { data: newRespondent, error: insertError } = await supabase
       .from("respondents")
-      .insert({ poll_id: pollId, name: name.trim(), email: email.trim() })
+      .insert({
+        poll_id: pollId,
+        name: name.trim(),
+        email: email.trim() || null,
+      })
       .select()
       .single();
+
     if (insertError || !newRespondent) {
       setError("Something went wrong. Please try again.");
       setLoading(false);
       return;
     }
+
     onDone(newRespondent, timezone);
   };
 
@@ -1085,7 +1138,8 @@ function IdentityStep({
           marginBottom: 24,
         }}
       >
-        Use the same name and email to edit your response later.
+        Enter your name to get started. Add an email to come back and edit
+        later.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <input
@@ -1093,6 +1147,7 @@ function IdentityStep({
           placeholder="Your name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onBlur={handleNameBlur}
           style={{
             padding: "10px 14px",
             border: "1px solid var(--border)",
@@ -1101,37 +1156,47 @@ function IdentityStep({
             color: "var(--text)",
           }}
         />
-        <input
-          type="email"
-          placeholder="Your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          disabled={emailLocked}
-          style={{
-            padding: "10px 14px",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            background: emailLocked ? "var(--border)" : "var(--bg)",
-            color: "var(--text)",
-            opacity: emailLocked ? 0.7 : 1,
-            cursor: emailLocked ? "not-allowed" : "text",
-          }}
-        />
-        {emailLocked && (
-          <p
+        <div>
+          <input
+            type="email"
+            placeholder={
+              emailRequired
+                ? "Email required for this name"
+                : "Email (optional)"
+            }
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            disabled={emailLocked}
             style={{
-              fontSize: 12,
-              color: "var(--text-secondary)",
-              marginTop: -6,
+              width: "100%",
+              padding: "10px 14px",
+              border: `1px solid ${emailRequired ? "var(--accent)" : "var(--border)"}`,
+              borderRadius: 8,
+              background: emailLocked ? "var(--border)" : "var(--bg)",
+              color: "var(--text)",
+              opacity: emailLocked ? 0.7 : 1,
+              cursor: emailLocked ? "not-allowed" : "text",
             }}
-          >
-            Email pulled from your account
-          </p>
-        )}
-        {error && (
-          <p style={{ color: "var(--accent)", fontSize: 13 }}>{error}</p>
-        )}
+          />
+          {emailLocked && (
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--text-secondary)",
+                marginTop: 4,
+              }}
+            >
+              Email pulled from your account
+            </p>
+          )}
+          {emailRequired && !emailLocked && (
+            <p style={{ fontSize: 12, color: "var(--accent)", marginTop: 4 }}>
+              This name was previously used with an email — enter it to access
+              your response
+            </p>
+          )}
+        </div>
         <div>
           <label
             style={{
@@ -1168,6 +1233,9 @@ function IdentityStep({
             )}
           </select>
         </div>
+        {error && (
+          <p style={{ color: "var(--accent)", fontSize: 13 }}>{error}</p>
+        )}
         <button
           onClick={handleSubmit}
           disabled={loading}
@@ -2049,28 +2117,28 @@ function parseMins(slotTime: string) {
 
 function slotToUTC(date: string, h: number, m: number, tz: string): Date {
   // Build the wall clock time string
-  const naive = `${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
-  
+  const naive = `${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+
   // Treat it as UTC first to get a Date object
-  const utcGuess = new Date(naive + 'Z').getTime()
-  
+  const utcGuess = new Date(naive + "Z").getTime();
+
   // Ask the browser: what does this UTC moment look like in the target timezone?
-  const formatter = new Intl.DateTimeFormat('en-CA', {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
     hour12: false,
-  })
-  
-  const inTzStr = formatter.format(new Date(utcGuess))
-  const inTzDate = new Date(inTzStr + 'Z').getTime()
-  
+  });
+
+  const inTzStr = formatter.format(new Date(utcGuess));
+  const inTzDate = new Date(inTzStr + "Z").getTime();
+
   // The offset between what we want (naive) and what UTC actually shows in that tz
-  const offset = utcGuess - inTzDate
-  
-  return new Date(utcGuess + offset)
+  const offset = utcGuess - inTzDate;
+
+  return new Date(utcGuess + offset);
 }
