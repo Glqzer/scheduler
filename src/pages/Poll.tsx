@@ -89,21 +89,16 @@ export default function Poll() {
     busy: { start: string; end: string; summary?: string }[],
     respondentId: string,
   ) => {
-    if (!poll) return
+    if (!poll) return;
     const newBusySlots: Record<string, string> = {};
 
     for (const option of options) {
       if (!option.slot_time) continue;
-      const [h, m] = option.slot_time.split(":").map(Number);
+      const parts = option.slot_time.split(":").map(Number);
+      const h = parts[0];
+      const m = parts[1];
 
-      // Convert slot time from poll's timezone to UTC for comparison
-      const naive = `${option.date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
-      const asUTC = new Date(naive + "Z");
-      const inPollTz = new Date(
-        asUTC.toLocaleString("en-US", { timeZone: poll.timezone }),
-      );
-      const offset = asUTC.getTime() - inPollTz.getTime();
-      const slotStart = new Date(asUTC.getTime() + offset);
+      const slotStart = slotToUTC(option.date, h, m, poll.timezone);
       const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
 
       const busyEvent = busy.find((b) => {
@@ -1885,23 +1880,55 @@ function GridHeader({
 
 function AvailableLegend({ hasBusy }: { hasBusy?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-secondary)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <div style={{ width: 12, height: 12, borderRadius: 3, background: '#22c55e' }} />
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        fontSize: 12,
+        color: "var(--text-secondary)",
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: 3,
+            background: "#22c55e",
+          }}
+        />
         Available
       </div>
       {hasBusy && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: '#fee2e2', borderLeft: '3px solid #ef4444' }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 3,
+              background: "#fee2e2",
+              borderLeft: "3px solid #ef4444",
+            }}
+          />
           Busy
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--border)' }} />
-        {hasBusy ? 'Unconfirmed' : 'Unavailable'}
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: 3,
+            background: "var(--border)",
+          }}
+        />
+        {hasBusy ? "Unconfirmed" : "Unavailable"}
       </div>
     </div>
-  )
+  );
 }
 
 function HeatmapLegend() {
@@ -1970,4 +1997,14 @@ function addMinsToSlot(slotTime: string, mins: number): string {
 function parseMins(slotTime: string) {
   const parts = slotTime.split(":").map(Number);
   return parts[0] * 60 + parts[1];
+}
+
+function slotToUTC(date: string, h: number, m: number, tz: string): Date {
+  const naive = `${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+  const utcGuess = new Date(naive + "Z").getTime();
+  const inTz = new Date(
+    new Date(utcGuess).toLocaleString("en-US", { timeZone: tz }),
+  ).getTime();
+  const offset = utcGuess - inTz;
+  return new Date(utcGuess + offset);
 }
