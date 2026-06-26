@@ -35,26 +35,34 @@ export default function GoogleCalendarCallback() {
     fetch(
       `/api/google-calendar?code=${encodeURIComponent(code)}&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
     )
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) {
-          setError(`Import failed: ${data.error}`);
-          setTimeout(() => navigate(`/poll/${pollId}`), 2000);
-          return;
-        }
-        if (data.busy) {
-          sessionStorage.setItem(
-            `calendar-busy-${pollId}`,
-            JSON.stringify(
-              data.busy.map((b: { start: string; end: string }) => ({
-                start: b.start,
-                end: b.end,
-                summary: "Busy",
-              })),
-            ),
-          );
-          setStatus("Calendar imported! Redirecting...");
-          setTimeout(() => navigate(`/poll/${pollId}`), 800);
+      .then(async (r) => {
+        const text = await r.text();
+        try {
+          const data = JSON.parse(text);
+          if (data.error) {
+            setError(
+              `Import failed: ${data.error} — ${JSON.stringify(data.details ?? "")}`,
+            );
+            setTimeout(() => navigate(`/poll/${pollId}`), 3000);
+            return;
+          }
+          if (data.busy) {
+            sessionStorage.setItem(
+              `calendar-busy-${pollId}`,
+              JSON.stringify(
+                data.busy.map((b: { start: string; end: string }) => ({
+                  start: b.start,
+                  end: b.end,
+                  summary: "Busy",
+                })),
+              ),
+            );
+            setStatus("Calendar imported! Redirecting...");
+            setTimeout(() => navigate(`/poll/${pollId}`), 800);
+          }
+        } catch {
+          setError(`API returned: ${text.slice(0, 200)}`);
+          setTimeout(() => navigate(`/poll/${pollId}`), 3000);
         }
       })
       .catch((err) => {
