@@ -91,6 +91,7 @@ export default function Poll() {
     busy: { start: string; end: string; summary?: string }[],
     respondentId: string,
   ) => {
+    console.log('applyBusyTimes called with', busy.length, 'busy events,', options.length, 'options')
     if (!poll) return;
     const newBusySlots: Record<string, string> = {};
 
@@ -115,6 +116,11 @@ export default function Poll() {
     }
 
     setBusySlots(newBusySlots);
+    console.log(
+      "newBusySlots:",
+      Object.keys(newBusySlots).length,
+      "busy slots set",
+    );
   };
 
   const loadAllAvailability = async () => {
