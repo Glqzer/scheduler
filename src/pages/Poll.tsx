@@ -7,6 +7,7 @@ import {
   getLocalTimezone,
   getLocalTimezoneLabel,
   formatSlotInTz,
+  getAllTimezones,
 } from "../lib/timezones";
 import { useIsMobile } from "../lib/useIsMobile";
 
@@ -443,13 +444,13 @@ export default function Poll() {
               <option value={getLocalTimezone()}>
                 Local — {getLocalTimezoneLabel()}
               </option>
-              {COMMON_TIMEZONES.filter(
-                (t) => t.value !== getLocalTimezone(),
-              ).map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
+              {getAllTimezones()
+                .filter((t) => t.value !== getLocalTimezone())
+                .map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </option>
+                ))}
             </select>
             {poll.timezone && poll.timezone !== displayTz && (
               <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>

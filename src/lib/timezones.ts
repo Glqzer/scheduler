@@ -127,3 +127,23 @@ export function formatSlotInTz(date: string, slotTime: string, fromTz: string, t
   }
   return convertSlotTime(date, slotTime, fromTz, toTz).time
 }
+
+export function getAllTimezones(): { value: string; label: string }[] {
+  const tzNames = (Intl as any).supportedValuesOf?.('timeZone') ?? COMMON_TIMEZONES.map(t => t.value)
+  
+  return tzNames.map((tz: string) => {
+    const now = new Date()
+    let offset = ''
+    try {
+      offset = now.toLocaleTimeString('en-US', {
+        timeZone: tz,
+        timeZoneName: 'shortOffset'
+      }).split(' ').pop() ?? ''
+    } catch {
+      offset = 'UTC'
+    }
+    return { value: tz, label: `${tz.replace(/_/g, ' ')} (${offset})` }
+  }).sort((a: { value: string; label: string }, b: { value: string; label: string }) => 
+    a.value.localeCompare(b.value)
+  )
+}

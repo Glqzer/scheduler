@@ -5,10 +5,10 @@ import { supabase } from "../lib/supabase";
 import { useIsMobile } from "../lib/useIsMobile";
 import {
   COMMON_TIMEZONES,
+  getAllTimezones,
   getLocalTimezone,
   getLocalTimezoneLabel,
 } from "../lib/timezones";
-
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2);
@@ -90,12 +90,16 @@ function TimezoneSelect({
         width: "100%",
       }}
     >
-      <option value={localTz}>Local — {getLocalTimezoneLabel()}</option>
-      {COMMON_TIMEZONES.filter((t) => t.value !== localTz).map((tz) => (
-        <option key={tz.value} value={tz.value}>
-          {tz.label}
-        </option>
-      ))}
+      <option value={getLocalTimezone()}>
+        Local — {getLocalTimezoneLabel()}
+      </option>
+      {getAllTimezones()
+        .filter((t) => t.value !== getLocalTimezone())
+        .map((tz) => (
+          <option key={tz.value} value={tz.value}>
+            {tz.label}
+          </option>
+        ))}
     </select>
   );
 }
