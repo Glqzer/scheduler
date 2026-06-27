@@ -455,7 +455,7 @@ export default function Poll() {
             {poll.timezone && poll.timezone !== displayTz && (
               <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                 Poll created in{" "}
-                {COMMON_TIMEZONES.find((t) => t.value === poll.timezone)
+                {getAllTimezones().find((t) => t.value === poll.timezone)
                   ?.label ?? poll.timezone}
               </span>
             )}
@@ -1297,13 +1297,13 @@ function IdentityStep({
             <option value={getLocalTimezone()}>
               Local — {getLocalTimezoneLabel()}
             </option>
-            {COMMON_TIMEZONES.filter((t) => t.value !== getLocalTimezone()).map(
-              (tz) => (
+            {getAllTimezones()
+              .filter((t) => t.value !== getLocalTimezone())
+              .map((tz) => (
                 <option key={tz.value} value={tz.value}>
                   {tz.label}
                 </option>
-              ),
-            )}
+              ))}
           </select>
         </div>
         {error && (

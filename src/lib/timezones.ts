@@ -129,13 +129,45 @@ export function formatSlotInTz(date: string, slotTime: string, fromTz: string, t
 }
 
 export function getAllTimezones(): { value: string; label: string }[] {
-  const tzNames = (Intl as any).supportedValuesOf?.('timeZone') ?? COMMON_TIMEZONES.map(t => t.value)
+  let tzNames: string[]
   
+  try {
+    tzNames = (Intl as any).supportedValuesOf('timeZone')
+    if (!tzNames || tzNames.length === 0) throw new Error('empty')
+  } catch {
+    // Fallback: hardcoded comprehensive list
+    tzNames = [
+      'Pacific/Honolulu', 'America/Anchorage', 'America/Los_Angeles',
+      'America/Denver', 'America/Phoenix', 'America/Chicago',
+      'America/New_York', 'America/Halifax', 'America/Sao_Paulo',
+      'Atlantic/Azores', 'Europe/London', 'Europe/Paris',
+      'Europe/Berlin', 'Europe/Helsinki', 'Europe/Moscow',
+      'Asia/Dubai', 'Asia/Karachi', 'Asia/Dhaka', 'Asia/Bangkok',
+      'Asia/Singapore', 'Asia/Tokyo', 'Asia/Seoul', 'Australia/Sydney',
+      'Pacific/Auckland', 'UTC',
+      'America/Toronto', 'America/Vancouver', 'America/Mexico_City',
+      'America/Bogota', 'America/Lima', 'America/Santiago',
+      'America/Buenos_Aires', 'America/Caracas', 'America/Panama',
+      'Europe/Amsterdam', 'Europe/Athens', 'Europe/Brussels',
+      'Europe/Budapest', 'Europe/Copenhagen', 'Europe/Dublin',
+      'Europe/Istanbul', 'Europe/Lisbon', 'Europe/Madrid',
+      'Europe/Oslo', 'Europe/Prague', 'Europe/Rome',
+      'Europe/Stockholm', 'Europe/Vienna', 'Europe/Warsaw',
+      'Europe/Zurich', 'Africa/Cairo', 'Africa/Johannesburg',
+      'Africa/Lagos', 'Africa/Nairobi', 'Asia/Beirut',
+      'Asia/Colombo', 'Asia/Calcutta', 'Asia/Kathmandu',
+      'Asia/Almaty', 'Asia/Tashkent', 'Asia/Yekaterinburg',
+      'Asia/Kolkata', 'Asia/Yangon', 'Asia/Ho_Chi_Minh',
+      'Asia/Jakarta', 'Asia/Manila', 'Asia/Hong_Kong',
+      'Asia/Taipei', 'Asia/Vladivostok', 'Asia/Magadan',
+      'Pacific/Guam', 'Pacific/Fiji', 'Pacific/Tongatapu',
+    ]
+  }
+
   return tzNames.map((tz: string) => {
-    const now = new Date()
     let offset = ''
     try {
-      offset = now.toLocaleTimeString('en-US', {
+      offset = new Date().toLocaleTimeString('en-US', {
         timeZone: tz,
         timeZoneName: 'shortOffset'
       }).split(' ').pop() ?? ''
@@ -143,7 +175,5 @@ export function getAllTimezones(): { value: string; label: string }[] {
       offset = 'UTC'
     }
     return { value: tz, label: `${tz.replace(/_/g, ' ')} (${offset})` }
-  }).sort((a: { value: string; label: string }, b: { value: string; label: string }) => 
-    a.value.localeCompare(b.value)
-  )
+  }).sort((a, b) => a.value.localeCompare(b.value))
 }
